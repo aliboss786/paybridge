@@ -60,3 +60,5 @@
 *.parquet filter=lfs diff=lfs merge=lfs -text
 # <<< shogo git-lfs (managed) <<<
 .shogo/sessions.db-wal filter=lfs diff=lfs merge=lfs -text
+paybridge-nextjs/.next/cache/webpack/client-production/0.pack filter=lfs diff=lfs merge=lfs -text
+paybridge-nextjs/.next/cache/webpack/server-production/0.pack filter=lfs diff=lfs merge=lfs -text

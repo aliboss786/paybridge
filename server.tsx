@@ -26,9 +26,6 @@ app.use('*', async (c, next) => {
 // Health check endpoint
 app.get('/health', (c) => c.json({ ok: true, timestamp: new Date().toISOString() }))
 
-// Custom API routes (mounted FIRST to override generated CRUD routes with auth)
-app.route('/api', customRoutes)
-
 // CRUD routes (available after schema.prisma has models)
 try {
   const { createAllRoutes } = await import('./src/generated')
@@ -37,6 +34,9 @@ try {
 } catch {
   // No generated routes yet — CRUD routes will appear after schema.prisma is written
 }
+
+// Custom API routes (always mounted)
+app.route('/api', customRoutes)
 
 // Installed-integration tools proxy → forwards to the agent runtime
 // using RUNTIME_AUTH_SECRET + RUNTIME_PORT (auto-detected from env).
