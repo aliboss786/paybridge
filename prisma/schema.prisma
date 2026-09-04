@@ -1,0 +1,188 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id             String    @id @default(cuid())
+  email          String    @unique
+  name           String?
+  passwordHash   String    @map("password_hash")
+  phone          String?
+  status         String    @default("active")
+  role           String    @default("user")
+  feePercentage  Float     @default(2.0) @map("fee_percentage")
+  balance        Float     @default(0)
+  apiRateLimit   Int       @default(100) @map("api_rate_limit")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  transactions   Transaction[]
+  ledger         Ledger[]
+  apiCredentials ApiCredential[]
+
+  @@map("users")
+}
+
+model Admin {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  name         String?
+  passwordHash String    @map("password_hash")
+  role         String    @default("admin")
+  lastLoginAt  DateTime? @map("last_login_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  @@map("admins")
+}
+
+model ApiCredential {
+  id          String   @id @default(cuid())
+  userId      String   @map("user_id")
+  apiKey      String   @unique @map("api_key")
+  secretKey   String   @map("secret_key")
+  permissions String   @default("read,write")
+  isActive    Boolean  @default(true) @map("is_active")
+  lastUsedAt  DateTime? @map("last_used_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("api_credentials")
+}
+
+model Transaction {
+  id              String   @id @default(cuid())
+  userId          String   @map("user_id")
+  transactionId   String   @unique @map("transaction_id")
+  orderId         String?  @map("order_id")
+  type            String
+  paymentMethod   String   @map("payment_method")
+  amount          Float
+  currency        String   @default("PKR")
+  fee             Float    @default(0)
+  platformFee     Float    @default(0) @map("platform_fee")
+  netAmount       Float    @default(0) @map("net_amount")
+  status          String   @default("pending")
+  gatewayRef      String?  @map("gateway_ref")
+  gatewayResponse String?  @map("gateway_response")
+  customerName    String?  @map("customer_name")
+  customerEmail   String?  @map("customer_email")
+  customerPhone   String?  @map("customer_phone")
+  callbackUrl     String?  @map("callback_url")
+  metadata        String?
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  events          TransactionEvent[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("transactions")
+}
+
+model TransactionEvent {
+  id            String   @id @default(cuid())
+  transactionId String   @map("transaction_id")
+  status        String
+  message       String?
+  gatewayData   String?  @map("gateway_data")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+
+  @@map("transaction_events")
+}
+
+model Ledger {
+  id            String   @id @default(cuid())
+  userId        String   @map("user_id")
+  transactionId String?  @map("transaction_id")
+  type          String
+  amount        Float
+  balanceAfter  Float    @map("balance_after")
+  description   String?
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([createdAt])
+  @@map("ledger")
+}
+
+model PaymentGateway {
+  id            String   @id @default(cuid())
+  name          String   @unique
+  displayName   String   @map("display_name")
+  isEnabled     Boolean  @default(false) @map("is_enabled")
+  environment   String   @default("production")
+  credentials   String   @default("{}")
+  callbackUrl   String?  @map("callback_url")
+  feeFixed      Float    @default(0) @map("fee_fixed")
+  feePercentage Float    @default(0) @map("fee_percentage")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@map("payment_gateways")
+}
+
+model Setting {
+  id    String @id @default(cuid())
+  key   String @unique
+  value String
+  group String @default("general")
+
+  @@map("settings")
+}
+
+model ApiLog {
+  id            String   @id @default(cuid())
+  userId        String?  @map("user_id")
+  endpoint      String
+  method        String
+  statusCode    Int?     @map("status_code")
+  ipAddress     String?  @map("ip_address")
+  requestBody   String?  @map("request_body")
+  responseBody  String?  @map("response_body")
+  transactionId String?  @map("transaction_id")
+  errorMessage  String?  @map("error_message")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@index([createdAt])
+  @@map("api_logs")
+}
+
+model Webhook {
+  id            String   @id @default(cuid())
+  userId        String   @map("user_id")
+  url           String
+  events        String   @default("payment.success,payment.failed")
+  secret        String
+  isActive      Boolean  @default(true) @map("is_active")
+  lastTriggered DateTime? @map("last_triggered")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@map("webhooks")
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String?  @map("user_id")
+  title     String
+  message   String
+  type      String   @default("info")
+  isRead    Boolean  @default(false) @map("is_read")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@map("notifications")
+}
