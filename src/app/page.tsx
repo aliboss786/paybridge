@@ -1,12 +1,26 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Component, type ReactNode } from 'react'
+import dynamic from 'next/dynamic'
 import LandingPage from '@/components/LandingPage'
 import AuthPage from '@/components/AuthPage'
-import AdminPanel from '@/components/AdminPanel'
-import UserDashboard from '@/components/UserDashboard'
-import PaymentPage from '@/components/PaymentPage'
-import ApiDocs from '@/components/ApiDocs'
+
+const AdminPanel = dynamic(() => import('@/components/AdminPanel'), { ssr: false })
+const UserDashboard = dynamic(() => import('@/components/UserDashboard'), { ssr: false })
+const PaymentPage = dynamic(() => import('@/components/PaymentPage'), { ssr: false })
+const ApiDocs = dynamic(() => import('@/components/ApiDocs'), { ssr: false })
+
+class ErrorBoundary extends Component<{ children: ReactNode; fallback: ReactNode }, { hasError: boolean }> {
+  constructor(props: { children: ReactNode; fallback: ReactNode }) {
+    super(props)
+    this.state = { hasError: false }
+  }
+  static getDerivedStateFromError() { return { hasError: true } }
+  render() {
+    if (this.state.hasError) return this.props.fallback
+    return this.props.children
+  }
+}
 
 export default function Home() {
   const [page, setPage] = useState('home')
@@ -20,7 +34,6 @@ export default function Home() {
       if (pathParts[1] === 'pay' && pathParts[2]) {
         setPayId(pathParts[2])
       }
-
       const saved = localStorage.getItem('pb_user')
       if (saved) {
         try {
@@ -49,6 +62,18 @@ export default function Home() {
     setPage('home')
   }
 
+  const fallback = (
+    <div className="flex items-center justify-center min-h-screen bg-[#0a0e1a] text-white">
+      <div className="text-center p-8">
+        <h2 className="text-xl font-bold mb-4">Something went wrong</h2>
+        <p className="text-gray-400 mb-6">Please refresh the page.</p>
+        <button onClick={() => window.location.reload()} className="bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-3 rounded-lg">
+          Reload
+        </button>
+      </div>
+    </div>
+  )
+
   if (!mounted) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-[#0a0e1a]">
@@ -57,18 +82,17 @@ export default function Home() {
     )
   }
 
-  if (payId) return <PaymentPage transactionId={payId} />
-
-  if (page === 'docs') return <ApiDocs onNavigate={setPage} />
+  if (payId) return <ErrorBoundary fallback={fallback}><PaymentPage transactionId={payId} /></ErrorBoundary>
+  if (page === 'docs') return <ErrorBoundary fallback={fallback}><ApiDocs onNavigate={setPage} /></ErrorBoundary>
 
   switch (page) {
     case 'login':
     case 'register':
       return <AuthPage onNavigate={setPage} onLogin={handleLogin} />
     case 'admin':
-      return user ? <AdminPanel user={user} onLogout={handleLogout} /> : <AuthPage onNavigate={setPage} onLogin={handleLogin} />
+      return user ? <ErrorBoundary fallback={fallback}><AdminPanel user={user} onLogout={handleLogout} /></ErrorBoundary> : <AuthPage onNavigate={setPage} onLogin={handleLogin} />
     case 'dashboard':
-      return user ? <UserDashboard user={user} onLogout={handleLogout} /> : <AuthPage onNavigate={setPage} onLogin={handleLogin} />
+      return user ? <ErrorBoundary fallback={fallback}><UserDashboard user={user} onLogout={handleLogout} /></ErrorBoundary> : <AuthPage onNavigate={setPage} onLogin={handleLogin} />
     default:
       return <LandingPage onNavigate={setPage} />
   }
