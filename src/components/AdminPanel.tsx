@@ -445,7 +445,7 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
     const form = document.createElement('form')
     form.method = 'POST'
     form.action = liveTestResult.redirect_url
-    form.target = '_blank'
+    form.target = '_self'
     Object.entries(liveTestResult.form_data).forEach(([key, value]) => {
       const input = document.createElement('input')
       input.type = 'hidden'

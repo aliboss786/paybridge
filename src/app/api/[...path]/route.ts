@@ -70,6 +70,16 @@ function requireAdmin(req: NextRequest) {
   return user
 }
 
+// ==================== JAZZCASH HASH HELPER ====================
+// Official JazzCash doc: https://sandbox.jazzcash.com.pk/SandboxDocumentation/v4.2/features.html
+// HMAC-SHA256: sort all PP fields alphabetically, join VALUES with '&', prepend integritySalt, then HMAC with integritySalt as key
+function calculateJazzCashSecureHash(integritySalt: string, formFields: Record<string, string>): string {
+  const sortedKeys = Object.keys(formFields).sort()
+  const values = sortedKeys.map(k => formFields[k])
+  const stringToSign = integritySalt + '&' + values.join('&')
+  return hmacSha256(integritySalt, stringToSign)
+}
+
 // ==================== GATEWAY URLs ====================
 const JAZZCASH_URLS = { production: 'https://payments.jazzcash.com.pk/CustomerPortal/transactionmanagement/merchantpayment/MerchantHostedFormPOST.aspx' }
 const EASYPAISA_URLS = { production: 'https://easypay.easypaisa.com.pk/easypay-merchant/faces/pg/site/TransactionDirectReq.jsf' }
@@ -257,24 +267,16 @@ async function handleRoute(method: string, req: NextRequest, route: string) {
 
       if (payMethod === 'jazzcash') {
         const returnUrl = `${baseUrl}/api/v1/payment/callback/jazzcash`
-        // JazzCash: pp_Password = SHA256(merchantId + integritySalt + password)
-        const ppPassword = sha256(credentials.merchantId + credentials.integritySalt + credentials.password)
-        // Build form fields for secure hash (all fields except pp_SecureHash, sorted alphabetically)
         const formFields: Record<string, string> = {
           pp_Amount: String(Math.round(amount * 100)),
           pp_Language: 'EN',
           pp_MerchantID: credentials.merchantId,
-          pp_MobileNumber: phone || '',
-          pp_Password: ppPassword,
+          pp_Password: credentials.password,
           pp_ReturnURL: returnUrl,
           pp_TxnRefNo: transactionId,
-          pp_TxnType: 'MWALLET',
         }
-        // Add CNIC if available
-        const sortedKeys = Object.keys(formFields).sort()
-        const stringToSign = sortedKeys.map(k => `${k}=${formFields[k]}`).join('&')
-        const secureHash = hmacSha256(credentials.integritySalt, stringToSign)
-        formFields['pp_SecureHash'] = secureHash
+        if (phone) formFields['pp_MobileNumber'] = phone
+        formFields['pp_SecureHash'] = calculateJazzCashSecureHash(credentials.integritySalt, formFields)
         return json({
           success: true, environment: 'production',
           redirect_url: JAZZCASH_URLS.production,
@@ -410,23 +412,16 @@ async function handleRoute(method: string, req: NextRequest, route: string) {
       
       if (payMethod === 'jazzcash') {
         const returnUrl = `${baseUrl}/api/v1/payment/callback/jazzcash`
-        // JazzCash: pp_Password = SHA256(merchantId + integritySalt + password)
-        const ppPassword = sha256(credentials.merchantId + credentials.integritySalt + credentials.password)
-        // Build form fields for secure hash (all fields except pp_SecureHash, sorted alphabetically)
         const formFields: Record<string, string> = {
           pp_Amount: String(Math.round(amount * 100)),
           pp_Language: 'EN',
           pp_MerchantID: credentials.merchantId,
-          pp_MobileNumber: customerPhone || '',
-          pp_Password: ppPassword,
+          pp_Password: credentials.password,
           pp_ReturnURL: returnUrl,
           pp_TxnRefNo: transactionId,
-          pp_TxnType: 'MWALLET',
         }
-        const sortedKeys = Object.keys(formFields).sort()
-        const stringToSign = sortedKeys.map(k => `${k}=${formFields[k]}`).join('&')
-        const secureHash = hmacSha256(credentials.integritySalt, stringToSign)
-        formFields['pp_SecureHash'] = secureHash
+        if (customerPhone) formFields['pp_MobileNumber'] = customerPhone
+        formFields['pp_SecureHash'] = calculateJazzCashSecureHash(credentials.integritySalt, formFields)
         return json({
           success: true, transactionId, redirectUrl: JAZZCASH_URLS.production,
           formData: formFields
@@ -512,21 +507,16 @@ async function handleRoute(method: string, req: NextRequest, route: string) {
 
       if (transaction.paymentMethod === 'jazzcash') {
         const returnUrl = `${baseUrl}/api/v1/payment/callback/jazzcash`
-        const ppPassword = sha256(credentials.merchantId + credentials.integritySalt + credentials.password)
         const formFields: Record<string, string> = {
           pp_Amount: String(Math.round(transaction.amount * 100)),
           pp_Language: 'EN',
           pp_MerchantID: credentials.merchantId,
-          pp_MobileNumber: transaction.customerPhone || '',
-          pp_Password: ppPassword,
+          pp_Password: credentials.password,
           pp_ReturnURL: returnUrl,
           pp_TxnRefNo: transaction.transactionId,
-          pp_TxnType: 'MWALLET',
         }
-        const sortedKeys = Object.keys(formFields).sort()
-        const stringToSign = sortedKeys.map(k => `${k}=${formFields[k]}`).join('&')
-        const secureHash = hmacSha256(credentials.integritySalt, stringToSign)
-        formFields['pp_SecureHash'] = secureHash
+        if (transaction.customerPhone) formFields['pp_MobileNumber'] = transaction.customerPhone
+        formFields['pp_SecureHash'] = calculateJazzCashSecureHash(credentials.integritySalt, formFields)
         return json({ success: true, redirect_url: JAZZCASH_URLS.production, form_data: formFields })
       } else if (transaction.paymentMethod === 'easypaisa') {
         return json({
