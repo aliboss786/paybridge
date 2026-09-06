@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, Component, type ReactNode } from 'react'
+import { useState, useEffect, Component, type ReactNode, type ErrorInfo } from 'react'
 import dynamic from 'next/dynamic'
 import LandingPage from '@/components/LandingPage'
 import AuthPage from '@/components/AuthPage'
@@ -10,14 +10,35 @@ const UserDashboard = dynamic(() => import('@/components/UserDashboard'), { ssr:
 const PaymentPage = dynamic(() => import('@/components/PaymentPage'), { ssr: false })
 const ApiDocs = dynamic(() => import('@/components/ApiDocs'), { ssr: false })
 
-class ErrorBoundary extends Component<{ children: ReactNode; fallback: ReactNode }, { hasError: boolean }> {
-  constructor(props: { children: ReactNode; fallback: ReactNode }) {
+interface ErrorBoundaryState { hasError: boolean; error: string; stack: string }
+class ErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryState> {
+  constructor(props: { children: ReactNode }) {
     super(props)
-    this.state = { hasError: false }
+    this.state = { hasError: false, error: '', stack: '' }
   }
-  static getDerivedStateFromError() { return { hasError: true } }
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error: error.message || String(error), stack: error.stack || '' }
+  }
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error('PayBridge Error:', error, info.componentStack)
+  }
   render() {
-    if (this.state.hasError) return this.props.fallback
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen bg-[#0a0e1a] text-white flex items-center justify-center p-8">
+          <div className="max-w-lg w-full text-center">
+            <h2 className="text-2xl font-bold text-red-400 mb-4">Something went wrong</h2>
+            <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 mb-4 text-left">
+              <p className="text-red-300 font-mono text-sm break-all">{this.state.error}</p>
+              {this.state.stack && <pre className="text-gray-500 text-xs mt-2 overflow-auto max-h-40">{this.state.stack}</pre>}
+            </div>
+            <button onClick={() => window.location.reload()} className="bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-3 rounded-lg">
+              Reload Page
+            </button>
+          </div>
+        </div>
+      )
+    }
     return this.props.children
   }
 }
@@ -62,18 +83,6 @@ export default function Home() {
     setPage('home')
   }
 
-  const fallback = (
-    <div className="flex items-center justify-center min-h-screen bg-[#0a0e1a] text-white">
-      <div className="text-center p-8">
-        <h2 className="text-xl font-bold mb-4">Something went wrong</h2>
-        <p className="text-gray-400 mb-6">Please refresh the page.</p>
-        <button onClick={() => window.location.reload()} className="bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-3 rounded-lg">
-          Reload
-        </button>
-      </div>
-    </div>
-  )
-
   if (!mounted) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-[#0a0e1a]">
@@ -82,17 +91,17 @@ export default function Home() {
     )
   }
 
-  if (payId) return <ErrorBoundary fallback={fallback}><PaymentPage transactionId={payId} /></ErrorBoundary>
-  if (page === 'docs') return <ErrorBoundary fallback={fallback}><ApiDocs onNavigate={setPage} /></ErrorBoundary>
+  if (payId) return <ErrorBoundary><PaymentPage transactionId={payId} /></ErrorBoundary>
+  if (page === 'docs') return <ErrorBoundary><ApiDocs onNavigate={setPage} /></ErrorBoundary>
 
   switch (page) {
     case 'login':
     case 'register':
       return <AuthPage onNavigate={setPage} onLogin={handleLogin} />
     case 'admin':
-      return user ? <ErrorBoundary fallback={fallback}><AdminPanel user={user} onLogout={handleLogout} /></ErrorBoundary> : <AuthPage onNavigate={setPage} onLogin={handleLogin} />
+      return user ? <ErrorBoundary><AdminPanel user={user} onLogout={handleLogout} /></ErrorBoundary> : <AuthPage onNavigate={setPage} onLogin={handleLogin} />
     case 'dashboard':
-      return user ? <ErrorBoundary fallback={fallback}><UserDashboard user={user} onLogout={handleLogout} /></ErrorBoundary> : <AuthPage onNavigate={setPage} onLogin={handleLogin} />
+      return user ? <ErrorBoundary><UserDashboard user={user} onLogout={handleLogout} /></ErrorBoundary> : <AuthPage onNavigate={setPage} onLogin={handleLogin} />
     default:
       return <LandingPage onNavigate={setPage} />
   }
