@@ -257,10 +257,29 @@ async function handleRoute(method: string, req: NextRequest, route: string) {
 
       if (payMethod === 'jazzcash') {
         const returnUrl = `${baseUrl}/api/v1/payment/callback/jazzcash`
+        // JazzCash: pp_Password = SHA256(merchantId + integritySalt + password)
+        const ppPassword = sha256(credentials.merchantId + credentials.integritySalt + credentials.password)
+        // Build form fields for secure hash (all fields except pp_SecureHash, sorted alphabetically)
+        const formFields: Record<string, string> = {
+          pp_Amount: String(Math.round(amount * 100)),
+          pp_Language: 'EN',
+          pp_MerchantID: credentials.merchantId,
+          pp_MobileNumber: phone || '',
+          pp_Password: ppPassword,
+          pp_ReturnURL: returnUrl,
+          pp_TxnRefNo: transactionId,
+          pp_TxnType: 'MWALLET',
+        }
+        // Add CNIC if available
+        const sortedKeys = Object.keys(formFields).sort()
+        const stringToSign = sortedKeys.map(k => `${k}=${formFields[k]}`).join('&')
+        const secureHash = hmacSha256(credentials.integritySalt, stringToSign)
+        formFields['pp_SecureHash'] = secureHash
         return json({
           success: true, environment: 'production',
           redirect_url: JAZZCASH_URLS.production,
-          form_data: { pp_MerchantID: credentials.merchantId, pp_Password: credentials.password, pp_TxnRefNo: transactionId, pp_Amount: String(amount * 100), pp_ReturnURL: returnUrl, pp_Language: 'EN' },
+          form_data: formFields,
+          transaction_id: transactionId, amount, fee: 0,
           transactionRef: transactionId, message: `Live test ready. Amount: Rs ${amount}, Phone: ${phone}`
         })
       } else if (payMethod === 'easypaisa') {
@@ -391,9 +410,26 @@ async function handleRoute(method: string, req: NextRequest, route: string) {
       
       if (payMethod === 'jazzcash') {
         const returnUrl = `${baseUrl}/api/v1/payment/callback/jazzcash`
+        // JazzCash: pp_Password = SHA256(merchantId + integritySalt + password)
+        const ppPassword = sha256(credentials.merchantId + credentials.integritySalt + credentials.password)
+        // Build form fields for secure hash (all fields except pp_SecureHash, sorted alphabetically)
+        const formFields: Record<string, string> = {
+          pp_Amount: String(Math.round(amount * 100)),
+          pp_Language: 'EN',
+          pp_MerchantID: credentials.merchantId,
+          pp_MobileNumber: customerPhone || '',
+          pp_Password: ppPassword,
+          pp_ReturnURL: returnUrl,
+          pp_TxnRefNo: transactionId,
+          pp_TxnType: 'MWALLET',
+        }
+        const sortedKeys = Object.keys(formFields).sort()
+        const stringToSign = sortedKeys.map(k => `${k}=${formFields[k]}`).join('&')
+        const secureHash = hmacSha256(credentials.integritySalt, stringToSign)
+        formFields['pp_SecureHash'] = secureHash
         return json({
           success: true, transactionId, redirectUrl: JAZZCASH_URLS.production,
-          formData: { pp_MerchantID: credentials.merchantId, pp_Password: credentials.password, pp_TxnRefNo: transactionId, pp_Amount: String(Math.round(amount * 100)), pp_ReturnURL: returnUrl, pp_Language: 'EN' }
+          formData: formFields
         })
       } else if (payMethod === 'easypaisa') {
         return json({
@@ -463,6 +499,42 @@ async function handleRoute(method: string, req: NextRequest, route: string) {
       if (!user) return json({ error: 'Unauthorized' }, 401)
       const transactions = await prisma.transaction.findMany({ where: { userId: user.userId }, orderBy: { createdAt: 'desc' }, take: 100 })
       return json({ transactions })
+    }
+
+    if (route.startsWith('/v1/payment/get-redirect/') && method === 'POST') {
+      const transactionId = route.split('/')[4]
+      const transaction = await prisma.transaction.findUnique({ where: { transactionId } })
+      if (!transaction) return json({ error: 'Transaction not found' }, 404)
+      const gateway = await prisma.paymentGateway.findUnique({ where: { name: transaction.paymentMethod } })
+      if (!gateway || !gateway.isEnabled) return json({ error: 'Payment method not available' }, 400)
+      const credentials = JSON.parse(gateway.credentials)
+      const baseUrl = req.headers.get('origin') || url.origin
+
+      if (transaction.paymentMethod === 'jazzcash') {
+        const returnUrl = `${baseUrl}/api/v1/payment/callback/jazzcash`
+        const ppPassword = sha256(credentials.merchantId + credentials.integritySalt + credentials.password)
+        const formFields: Record<string, string> = {
+          pp_Amount: String(Math.round(transaction.amount * 100)),
+          pp_Language: 'EN',
+          pp_MerchantID: credentials.merchantId,
+          pp_MobileNumber: transaction.customerPhone || '',
+          pp_Password: ppPassword,
+          pp_ReturnURL: returnUrl,
+          pp_TxnRefNo: transaction.transactionId,
+          pp_TxnType: 'MWALLET',
+        }
+        const sortedKeys = Object.keys(formFields).sort()
+        const stringToSign = sortedKeys.map(k => `${k}=${formFields[k]}`).join('&')
+        const secureHash = hmacSha256(credentials.integritySalt, stringToSign)
+        formFields['pp_SecureHash'] = secureHash
+        return json({ success: true, redirect_url: JAZZCASH_URLS.production, form_data: formFields })
+      } else if (transaction.paymentMethod === 'easypaisa') {
+        return json({
+          success: true, redirect_url: EASYPAISA_URLS.production,
+          form_data: { merchantId: credentials.merchantId, storeId: credentials.storeId, transactionAmount: transaction.amount, mobileAccountNo: transaction.customerPhone, orderRef: transaction.transactionId }
+        })
+      }
+      return json({ error: 'Invalid payment method' }, 400)
     }
 
     if (route.startsWith('/v1/payment/live-status/') && method === 'GET') {

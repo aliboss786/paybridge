@@ -131,7 +131,7 @@ export default function PaymentPage({ transactionId }: PaymentPageProps) {
     setErrorMsg('')
 
     try {
-      const res = await fetch(`/api/v1/payment/process/${transactionId}`, {
+      const res = await fetch(`/api/v1/payment/get-redirect/${transactionId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ method: selectedMethod, phone }),
