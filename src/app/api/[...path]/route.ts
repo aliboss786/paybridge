@@ -500,7 +500,7 @@ async function handleRoute(method: string, req: NextRequest, route: string) {
     // ===== PAYMENT GATEWAYS =====
     if (route === '/payment-gateways' && method === 'GET') {
       const gateways = await prisma.paymentGateway.findMany({ orderBy: { createdAt: 'desc' } })
-      return json({ gateways })
+      return json({ items: gateways })
     }
 
     if (route.startsWith('/payment-gateways/') && method === 'PATCH') {
