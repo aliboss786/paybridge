@@ -440,24 +440,6 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
     }
   }
 
-  const handleLiveTestRedirect = () => {
-    if (!liveTestResult?.redirect_url || !liveTestResult?.form_data) return
-    const form = document.createElement('form')
-    form.method = 'POST'
-    form.action = liveTestResult.redirect_url
-    form.target = '_self'
-    Object.entries(liveTestResult.form_data).forEach(([key, value]) => {
-      const input = document.createElement('input')
-      input.type = 'hidden'
-      input.name = key
-      input.value = String(value)
-      form.appendChild(input)
-    })
-    document.body.appendChild(form)
-    form.submit()
-    document.body.removeChild(form)
-  }
-
   const handleUpdateGateway = async (id: string, data: any) => {
     try {
       const res = await authFetch(`/api/payment-gateways/${id}`, {
@@ -893,7 +875,7 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
             <div className="space-y-4 mt-2">
               <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-center">
                 <CheckCircle size={48} className="mx-auto mb-3 text-emerald-400" />
-                <p className="text-emerald-400 font-bold text-lg">Transaction Ready!</p>
+                <p className="text-emerald-400 font-bold text-lg">Request Sent to Gateway!</p>
                 <p className="text-sm text-gray-400 mt-1">{liveTestResult.message}</p>
               </div>
               <div className="grid grid-cols-2 gap-3 text-sm">
@@ -905,31 +887,18 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
                   <span className="text-xs text-gray-400 block">Amount</span>
                   <span className="font-mono text-emerald-400">Rs {liveTestResult.amount}</span>
                 </div>
-                <div className="p-3 bg-[#1a2332] rounded-lg">
-                  <span className="text-xs text-gray-400 block">Platform Fee</span>
-                  <span className="font-mono text-yellow-400">Rs {liveTestResult.fee}</span>
-                </div>
-                <div className="p-3 bg-[#1a2332] rounded-lg">
-                  <span className="text-xs text-gray-400 block">Gateway</span>
-                  <Badge className='bg-red-500/20 text-red-400 border-red-500/30'>
-                    🔴 PRODUCTION (Real!)
-                  </Badge>
-                </div>
               </div>
-              <div className="flex gap-2">
-                <Button variant="outline" className="flex-1 border-white/10" onClick={() => setLiveTestResult(null)}>
-                  New Test
-                </Button>
-                <Button
-                  className="flex-1 bg-yellow-500 hover:bg-yellow-600 text-black font-semibold"
-                  onClick={handleLiveTestRedirect}
-                >
-                  <Zap size={14} className="mr-2" /> Pay to Gateway
-                </Button>
-              </div>
-              <p className="text-[11px] text-gray-400 text-center">
-                ⚠️ "Pay to Gateway" button real JazzCash/EasyPaisa page kholega — wahan se actual payment process hogi
-              </p>
+              {liveTestResult.gateway_response && (
+                <div className="p-3 bg-[#1a2332] rounded-lg">
+                  <span className="text-xs text-gray-400 block mb-2">Gateway Response</span>
+                  <pre className="text-[11px] font-mono text-emerald-300 whitespace-pre-wrap break-all bg-black/40 p-2 rounded border border-white/5 max-h-48 overflow-auto">
+                    {JSON.stringify(liveTestResult.gateway_response, null, 2)}
+                  </pre>
+                </div>
+              )}
+              <Button variant="outline" className="w-full border-white/10" onClick={() => setLiveTestResult(null)}>
+                New Test
+              </Button>
             </div>
           )}
         </DialogContent>

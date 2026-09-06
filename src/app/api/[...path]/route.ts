@@ -70,18 +70,56 @@ function requireAdmin(req: NextRequest) {
   return user
 }
 
-// ==================== JAZZCASH HASH HELPER ====================
-// Official JazzCash doc: https://sandbox.jazzcash.com.pk/SandboxDocumentation/v4.2/features.html
-// HMAC-SHA256: sort all PP fields alphabetically, join VALUES with '&', prepend integritySalt, then HMAC with integritySalt as key
-function calculateJazzCashSecureHash(integritySalt: string, formFields: Record<string, string>): string {
-  const sortedKeys = Object.keys(formFields).sort()
-  const values = sortedKeys.map(k => formFields[k])
+// ==================== JAZZCASH MWallet REST API v1.1 ====================
+// Official doc: MWallet REST API v1.1 (Without CNIC) Merchant Guide 2025-26
+// Hash doc: How is HMAC-SHA256 (pp_SecureHash) calculated.pdf
+const JAZZCASH_REST_URL = 'https://onlinepayments.jazzcash.com.pk/payment-orchestrator/api/v1/rest/payments/m-wallet'
+
+function getPktNow(): { txnDateTime: string; txnExpiryDateTime: string } {
+  const now = new Date()
+  const pktOffset = 5 * 60 * 60 * 1000
+  const pkt = new Date(now.getTime() + pktOffset)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  const txnDateTime = `${pkt.getFullYear()}${pad(pkt.getMonth() + 1)}${pad(pkt.getDate())}${pad(pkt.getHours())}${pad(pkt.getMinutes())}${pad(pkt.getSeconds())}`
+  const expiry = new Date(pkt.getTime() + 24 * 60 * 60 * 1000)
+  const txnExpiryDateTime = `${expiry.getFullYear()}${pad(expiry.getMonth() + 1)}${pad(expiry.getDate())}${pad(expiry.getHours())}${pad(expiry.getMinutes())}${pad(expiry.getSeconds())}`
+  return { txnDateTime, txnExpiryDateTime }
+}
+
+function buildJazzCashRequest(merchantId: string, password: string, integritySalt: string, amount: number, txnRefNo: string, returnUrl: string, phone?: string) {
+  const { txnDateTime, txnExpiryDateTime } = getPktNow()
+  const allFields: Record<string, string> = {
+    pp_Amount: String(Math.round(amount * 100)),
+    pp_BillReference: txnRefNo.replace(/[^a-zA-Z0-9]/g, ''),
+    pp_Description: 'Payment via PayBridge',
+    pp_Language: 'EN',
+    pp_MerchantID: merchantId,
+    pp_Password: password,
+    pp_ReturnURL: returnUrl,
+    pp_TxnCurrency: 'PKR',
+    pp_TxnDateTime: txnDateTime,
+    pp_TxnExpiryDateTime: txnExpiryDateTime,
+    pp_TxnRefNo: txnRefNo,
+    pp_TxnType: 'MWALLET',
+    pp_Version: '1.1',
+    ppmpf_1: phone || '',
+    ppmpf_2: '',
+    ppmpf_3: '',
+    ppmpf_4: '',
+    ppmpf_5: '',
+  }
+  const nonEmptyFields: Record<string, string> = {}
+  for (const [k, v] of Object.entries(allFields)) {
+    if (v !== '') nonEmptyFields[k] = v
+  }
+  const sortedKeys = Object.keys(nonEmptyFields).sort()
+  const values = sortedKeys.map(k => nonEmptyFields[k])
   const stringToSign = integritySalt + '&' + values.join('&')
-  return hmacSha256(integritySalt, stringToSign)
+  nonEmptyFields['pp_SecureHash'] = hmacSha256(integritySalt, stringToSign)
+  return nonEmptyFields
 }
 
 // ==================== GATEWAY URLs ====================
-const JAZZCASH_URLS = { production: 'https://payments.jazzcash.com.pk/CustomerPortal/transactionmanagement/merchantpayment/MerchantHostedFormPOST.aspx' }
 const EASYPAISA_URLS = { production: 'https://easypay.easypaisa.com.pk/easypay-merchant/faces/pg/site/TransactionDirectReq.jsf' }
 
 // ==================== ROUTE HANDLER ====================
@@ -267,22 +305,23 @@ async function handleRoute(method: string, req: NextRequest, route: string) {
 
       if (payMethod === 'jazzcash') {
         const returnUrl = `${baseUrl}/api/v1/payment/callback/jazzcash`
-        const formFields: Record<string, string> = {
-          pp_Amount: String(Math.round(amount * 100)),
-          pp_Language: 'EN',
-          pp_MerchantID: credentials.merchantId,
-          pp_Password: credentials.password,
-          pp_ReturnURL: returnUrl,
-          pp_TxnRefNo: transactionId,
+        const requestData = buildJazzCashRequest(credentials.merchantId, credentials.password, credentials.integritySalt, amount, transactionId, returnUrl, phone)
+        let gatewayResponse: any = null
+        try {
+          const resp = await fetch(JAZZCASH_REST_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestData),
+          })
+          gatewayResponse = await resp.json().catch(() => ({ raw: await resp.text().catch(() => 'unknown') }))
+        } catch (fetchErr: any) {
+          gatewayResponse = { error: fetchErr.message }
         }
-        if (phone) formFields['pp_MobileNumber'] = phone
-        formFields['pp_SecureHash'] = calculateJazzCashSecureHash(credentials.integritySalt, formFields)
         return json({
           success: true, environment: 'production',
-          redirect_url: JAZZCASH_URLS.production,
-          form_data: formFields,
           transaction_id: transactionId, amount, fee: 0,
-          transactionRef: transactionId, message: `Live test ready. Amount: Rs ${amount}, Phone: ${phone}`
+          gateway_response: gatewayResponse,
+          message: `Live test sent. Amount: Rs ${amount}, Phone: ${phone}`
         })
       } else if (payMethod === 'easypaisa') {
         return json({
@@ -412,19 +451,21 @@ async function handleRoute(method: string, req: NextRequest, route: string) {
       
       if (payMethod === 'jazzcash') {
         const returnUrl = `${baseUrl}/api/v1/payment/callback/jazzcash`
-        const formFields: Record<string, string> = {
-          pp_Amount: String(Math.round(amount * 100)),
-          pp_Language: 'EN',
-          pp_MerchantID: credentials.merchantId,
-          pp_Password: credentials.password,
-          pp_ReturnURL: returnUrl,
-          pp_TxnRefNo: transactionId,
+        const requestData = buildJazzCashRequest(credentials.merchantId, credentials.password, credentials.integritySalt, amount, transactionId, returnUrl, customerPhone)
+        let gatewayResponse: any = null
+        try {
+          const resp = await fetch(JAZZCASH_REST_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestData),
+          })
+          gatewayResponse = await resp.json().catch(() => ({ raw: await resp.text().catch(() => 'unknown') }))
+        } catch (fetchErr: any) {
+          gatewayResponse = { error: fetchErr.message }
         }
-        if (customerPhone) formFields['pp_MobileNumber'] = customerPhone
-        formFields['pp_SecureHash'] = calculateJazzCashSecureHash(credentials.integritySalt, formFields)
         return json({
-          success: true, transactionId, redirectUrl: JAZZCASH_URLS.production,
-          formData: formFields
+          success: true, transactionId,
+          gateway_response: gatewayResponse
         })
       } else if (payMethod === 'easypaisa') {
         return json({
@@ -507,17 +548,19 @@ async function handleRoute(method: string, req: NextRequest, route: string) {
 
       if (transaction.paymentMethod === 'jazzcash') {
         const returnUrl = `${baseUrl}/api/v1/payment/callback/jazzcash`
-        const formFields: Record<string, string> = {
-          pp_Amount: String(Math.round(transaction.amount * 100)),
-          pp_Language: 'EN',
-          pp_MerchantID: credentials.merchantId,
-          pp_Password: credentials.password,
-          pp_ReturnURL: returnUrl,
-          pp_TxnRefNo: transaction.transactionId,
+        const requestData = buildJazzCashRequest(credentials.merchantId, credentials.password, credentials.integritySalt, transaction.amount, transaction.transactionId, returnUrl, transaction.customerPhone || undefined)
+        let gatewayResponse: any = null
+        try {
+          const resp = await fetch(JAZZCASH_REST_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestData),
+          })
+          gatewayResponse = await resp.json().catch(() => ({ raw: await resp.text().catch(() => 'unknown') }))
+        } catch (fetchErr: any) {
+          gatewayResponse = { error: fetchErr.message }
         }
-        if (transaction.customerPhone) formFields['pp_MobileNumber'] = transaction.customerPhone
-        formFields['pp_SecureHash'] = calculateJazzCashSecureHash(credentials.integritySalt, formFields)
-        return json({ success: true, redirect_url: JAZZCASH_URLS.production, form_data: formFields })
+        return json({ success: true, gateway_response: gatewayResponse })
       } else if (transaction.paymentMethod === 'easypaisa') {
         return json({
           success: true, redirect_url: EASYPAISA_URLS.production,
