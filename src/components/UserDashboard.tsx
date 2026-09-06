@@ -70,7 +70,7 @@ export default function UserDashboard({ user, onLogout }: UserDashboardProps) {
     try {
       const res = await authFetch('/api/user/dashboard')
       const data = await res.json()
-      if (res.ok) setStats(data)
+      if (res.ok) setStats((prev: any) => ({ ...prev, ...(typeof data === 'object' && data !== null && !Array.isArray(data) ? data : {}) }))
     } catch { /* ignore */ }
   }, [])
 
@@ -78,7 +78,7 @@ export default function UserDashboard({ user, onLogout }: UserDashboardProps) {
     try {
       const res = await authFetch('/api/transactions')
       const data = await res.json()
-      if (res.ok) setTransactions(data.items || data || [])
+      if (res.ok) { const items = Array.isArray(data?.items) ? data.items : Array.isArray(data) ? data : []; setTransactions(items) }
     } catch { /* ignore */ }
   }, [])
 
@@ -132,11 +132,11 @@ export default function UserDashboard({ user, onLogout }: UserDashboardProps) {
   })
 
   const statCards = [
-    { label: 'Total Balance', value: `Rs ${stats.balance.toLocaleString()}`, icon: Wallet, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
-    { label: 'Total Cash In', value: `Rs ${stats.totalCashIn.toLocaleString()}`, icon: ArrowDownRight, color: 'text-blue-400', bg: 'bg-blue-500/10' },
-    { label: 'Total Cash Out', value: `Rs ${stats.totalCashOut.toLocaleString()}`, icon: ArrowUpRight, color: 'text-orange-400', bg: 'bg-orange-500/10' },
-    { label: "Today's Cash In", value: `Rs ${stats.todayCashIn.toLocaleString()}`, icon: ArrowDownRight, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
-    { label: "Today's Cash Out", value: `Rs ${stats.todayCashOut.toLocaleString()}`, icon: ArrowUpRight, color: 'text-orange-400', bg: 'bg-orange-500/10' },
+    { label: 'Total Balance', value: `Rs ${(stats.balance || 0).toLocaleString()}`, icon: Wallet, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
+    { label: 'Total Cash In', value: `Rs ${(stats.totalCashIn || 0).toLocaleString()}`, icon: ArrowDownRight, color: 'text-blue-400', bg: 'bg-blue-500/10' },
+    { label: 'Total Cash Out', value: `Rs ${(stats.totalCashOut || 0).toLocaleString()}`, icon: ArrowUpRight, color: 'text-orange-400', bg: 'bg-orange-500/10' },
+    { label: "Today's Cash In", value: `Rs ${(stats.todayCashIn || 0).toLocaleString()}`, icon: ArrowDownRight, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
+    { label: "Today's Cash Out", value: `Rs ${(stats.todayCashOut || 0).toLocaleString()}`, icon: ArrowUpRight, color: 'text-orange-400', bg: 'bg-orange-500/10' },
     { label: 'Successful', value: stats.successful, icon: CheckCircle, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
     { label: 'Pending', value: stats.pending, icon: Clock, color: 'text-yellow-400', bg: 'bg-yellow-500/10' },
     { label: 'Failed', value: stats.failed, icon: XCircle, color: 'text-red-400', bg: 'bg-red-500/10' },
@@ -266,7 +266,7 @@ export default function UserDashboard({ user, onLogout }: UserDashboardProps) {
 
                   {stats.todayFeeCut > 0 && (
                     <div className="mt-3 p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-xs text-emerald-300">
-                      <strong>Aaj ka Hisaab:</strong> Gross Rs {stats.todayCashIn.toLocaleString()} − Fee Rs {stats.todayFeeCut.toLocaleString()} = Net Rs {stats.todayNetRemaining.toLocaleString()}
+                      <strong>Aaj ka Hisaab:</strong> Gross Rs {(stats.todayCashIn || 0).toLocaleString()} − Fee Rs {(stats.todayFeeCut || 0).toLocaleString()} = Net Rs {(stats.todayNetRemaining || 0).toLocaleString()}
                     </div>
                   )}
                 </CardContent>

@@ -202,7 +202,7 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
     try {
       const res = await authFetch('/api/admin/dashboard')
       const data = await res.json()
-      if (res.ok) setStats(data)
+      if (res.ok) setStats((prev: any) => ({ ...prev, ...(typeof data === 'object' && data !== null && !Array.isArray(data) ? data : {}) }))
     } catch { /* ignore */ }
   }, [])
 
