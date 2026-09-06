@@ -1,7 +1,10 @@
 import type { NextConfig } from 'next'
 
 const nextConfig: NextConfig = {
-  // removed output: 'standalone' — Hostinger handles server process itself
+  output: 'standalone',
+  images: {
+    unoptimized: true,
+  },
 }
 
 export default nextConfig
