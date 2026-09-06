@@ -227,7 +227,7 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
     try {
       const res = await authFetch('/api/transactions')
       const data = await res.json()
-      if (res.ok) setTransactions(data.items || data || [])
+      if (res.ok) { const items = Array.isArray(data?.items) ? data.items : Array.isArray(data) ? data : []; setTransactions(items) }
     } catch { /* ignore */ }
   }, [])
 
@@ -235,7 +235,7 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
     try {
       const res = await authFetch('/api/payment-gateways')
       const data = await res.json()
-      if (res.ok) setGateways(data.items || data || [])
+      if (res.ok) { const items = Array.isArray(data?.items) ? data.items : Array.isArray(data) ? data : []; setGateways(items) }
     } catch { /* ignore */ }
   }, [])
 
@@ -243,7 +243,7 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
     try {
       const res = await authFetch('/api/api-logs')
       const data = await res.json()
-      const items = Array.isArray(data) ? data : (data.items || [])
+      const items = Array.isArray(data) ? data : Array.isArray(data?.items) ? data.items : []
       setApiLogs(items.slice(0, 50))
     } catch { /* ignore */ }
   }, [])
@@ -253,7 +253,7 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
       const res = await authFetch('/api/settings')
       const data = await res.json()
       const map: any = {}
-      for (const s of (data.items || data || [])) map[s.key] = s.value
+      for (const s of (Array.isArray(data?.items) ? data.items : Array.isArray(data) ? data : [])) if (s && s.key) map[s.key] = s.value
       setSettings(map)
     } catch { /* ignore */ }
   }, [])
@@ -262,7 +262,7 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
     try {
       const res = await authFetch('/api/notifications')
       const data = await res.json()
-      const items = Array.isArray(data) ? data : (data.items || [])
+      const items = Array.isArray(data) ? data : Array.isArray(data?.items) ? data.items : []
       setNotifications(items.slice(0, 20))
     } catch { /* ignore */ }
   }, [])
@@ -271,7 +271,7 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
     try {
       const res = await authFetch('/api/admin/backups')
       const data = await res.json()
-      setBackups(data.backups || [])
+      setBackups(Array.isArray(data?.backups) ? data.backups : [])
     } catch { /* ignore */ }
   }, [])
 
@@ -1065,7 +1065,7 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
                 </CardHeader>
                 <CardContent>
                   <div className="grid sm:grid-cols-2 gap-4">
-                    {gateways.map((gw: any) => (
+                    {(Array.isArray(gateways) ? gateways : []).map((gw: any) => (
                       <div key={gw.id} className="flex items-center justify-between p-4 rounded-xl bg-[#1a2332] border border-white/5">
                         <div className="flex items-center gap-3">
                           <Smartphone size={20} className="text-emerald-400" />
@@ -1101,7 +1101,7 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {transactions.slice(0, 5).map((t: any) => (
+                      {(Array.isArray(transactions) ? transactions : []).slice(0, 5).map((t: any) => (
                         <TableRow key={t.id} className="border-white/10">
                           <TableCell className="font-mono text-xs">{t.transactionId}</TableCell>
                           <TableCell>Rs {t.amount?.toLocaleString()}</TableCell>
@@ -1231,7 +1231,7 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredUsers.map((u: any) => (
+                      {(Array.isArray(filteredUsers) ? filteredUsers : []).map((u: any) => (
                         <TableRow key={u.id} className="border-white/10">
                           <TableCell>
                             <div>
@@ -1371,7 +1371,7 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
                 </Select>
                 <Button variant="outline" className="border-white/10" onClick={() => {
                   const csv = ['Transaction ID,Order ID,Amount,Method,Status,Date'].concat(
-                    filteredTransactions.map((t: any) => `${t.transactionId},${t.orderId || ''},${t.amount},${t.paymentMethod},${t.status},${t.createdAt}`)
+                    (Array.isArray(filteredTransactions) ? filteredTransactions : []).map((t: any) => `${t.transactionId},${t.orderId || ''},${t.amount},${t.paymentMethod},${t.status},${t.createdAt}`)
                   ).join('\n')
                   const blob = new Blob([csv], { type: 'text/csv' })
                   const url = URL.createObjectURL(blob)
@@ -1397,7 +1397,7 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredTransactions.map((t: any) => {
+                      {(Array.isArray(filteredTransactions) ? filteredTransactions : []).map((t: any) => {
                         const statusResult = liveStatusCheck[t.transactionId]
                         return (
                         <TableRow key={t.id} className="border-white/10">
@@ -1543,7 +1543,7 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
               </div>
 
               <div className="grid gap-6">
-                {gateways.map((gw: any) => {
+                {(Array.isArray(gateways) ? gateways : []).map((gw: any) => {
                   let creds: any = {}
                   try { creds = JSON.parse(gw.credentials || '{}') } catch { /* ignore */ }
 
@@ -1801,7 +1801,7 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {apiLogs.map((log: any) => (
+                      {(Array.isArray(apiLogs) ? apiLogs : []).map((log: any) => (
                         <TableRow key={log.id} className="border-white/10">
                           <TableCell className="text-xs text-gray-400">{new Date(log.createdAt).toLocaleString()}</TableCell>
                           <TableCell><Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30">{log.method}</Badge></TableCell>
@@ -2007,7 +2007,7 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {backups.map((b: any) => (
+                          {(Array.isArray(backups) ? backups : []).map((b: any) => (
                             <TableRow key={b.filename} className="border-white/10">
                               <TableCell className="font-mono text-xs text-gray-300">{b.filename}</TableCell>
                               <TableCell className="text-sm text-gray-400">{(b.size / 1024).toFixed(1)} KB</TableCell>
