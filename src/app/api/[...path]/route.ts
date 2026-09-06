@@ -313,7 +313,7 @@ async function handleRoute(method: string, req: NextRequest, route: string) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(requestData),
           })
-          gatewayResponse = await resp.json().catch(() => ({ raw: await resp.text().catch(() => 'unknown') }))
+          gatewayResponse = await resp.json().catch(async () => ({ raw: await resp.text().catch(() => 'unknown') }))
         } catch (fetchErr: any) {
           gatewayResponse = { error: fetchErr.message }
         }
@@ -459,7 +459,7 @@ async function handleRoute(method: string, req: NextRequest, route: string) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(requestData),
           })
-          gatewayResponse = await resp.json().catch(() => ({ raw: await resp.text().catch(() => 'unknown') }))
+          gatewayResponse = await resp.json().catch(async () => ({ raw: await resp.text().catch(() => 'unknown') }))
         } catch (fetchErr: any) {
           gatewayResponse = { error: fetchErr.message }
         }
@@ -556,7 +556,7 @@ async function handleRoute(method: string, req: NextRequest, route: string) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(requestData),
           })
-          gatewayResponse = await resp.json().catch(() => ({ raw: await resp.text().catch(() => 'unknown') }))
+          gatewayResponse = await resp.json().catch(async () => ({ raw: await resp.text().catch(() => 'unknown') }))
         } catch (fetchErr: any) {
           gatewayResponse = { error: fetchErr.message }
         }
