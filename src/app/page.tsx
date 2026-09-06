@@ -1,30 +1,12 @@
 'use client'
 
-import { useState, useEffect, Component, ReactNode } from 'react'
-import dynamic from 'next/dynamic'
-
-const LandingPage = dynamic(() => import('@/components/LandingPage'), { ssr: false })
-const AuthPage = dynamic(() => import('@/components/AuthPage'), { ssr: false })
-const AdminPanel = dynamic(() => import('@/components/AdminPanel'), { ssr: false })
-const UserDashboard = dynamic(() => import('@/components/UserDashboard'), { ssr: false })
-const PaymentPage = dynamic(() => import('@/components/PaymentPage'), { ssr: false })
-const ApiDocs = dynamic(() => import('@/components/ApiDocs'), { ssr: false })
-
-class ErrorBoundary extends Component<{ children: ReactNode; fallback: ReactNode }, { hasError: boolean; error: string }> {
-  constructor(props: { children: ReactNode; fallback: ReactNode }) {
-    super(props)
-    this.state = { hasError: false, error: '' }
-  }
-  static getDerivedStateFromError(error: Error) {
-    return { hasError: true, error: error.message }
-  }
-  render() {
-    if (this.state.hasError) {
-      return this.props.fallback
-    }
-    return this.props.children
-  }
-}
+import { useState, useEffect } from 'react'
+import LandingPage from '@/components/LandingPage'
+import AuthPage from '@/components/AuthPage'
+import AdminPanel from '@/components/AdminPanel'
+import UserDashboard from '@/components/UserDashboard'
+import PaymentPage from '@/components/PaymentPage'
+import ApiDocs from '@/components/ApiDocs'
 
 export default function Home() {
   const [page, setPage] = useState('home')
@@ -67,33 +49,27 @@ export default function Home() {
     setPage('home')
   }
 
-  const errorFallback = (
-    <div className="flex items-center justify-center min-h-screen bg-[#0a0e1a] text-white">
-      <div className="text-center p-8">
-        <h2 className="text-xl font-bold mb-4">Something went wrong</h2>
-        <p className="text-gray-400 mb-6">Please refresh the page or try again.</p>
-        <button onClick={() => window.location.reload()} className="bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-3 rounded-lg">
-          Reload Page
-        </button>
+  if (!mounted) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-[#0a0e1a]">
+        <div className="text-white text-lg">Loading PayBridge...</div>
       </div>
-    </div>
-  )
+    )
+  }
 
-  if (!mounted) return <div className="flex items-center justify-center min-h-screen bg-[#0a0e1a]"><div className="text-white text-lg">Loading PayBridge...</div></div>
+  if (payId) return <PaymentPage transactionId={payId} />
 
-  if (payId) return <ErrorBoundary fallback={errorFallback}><PaymentPage transactionId={payId} /></ErrorBoundary>
-
-  if (page === 'docs') return <ErrorBoundary fallback={errorFallback}><ApiDocs onNavigate={setPage} /></ErrorBoundary>
+  if (page === 'docs') return <ApiDocs onNavigate={setPage} />
 
   switch (page) {
     case 'login':
     case 'register':
-      return <ErrorBoundary fallback={errorFallback}><AuthPage onNavigate={setPage} onLogin={handleLogin} /></ErrorBoundary>
+      return <AuthPage onNavigate={setPage} onLogin={handleLogin} />
     case 'admin':
-      return user ? <ErrorBoundary fallback={errorFallback}><AdminPanel user={user} onLogout={handleLogout} /></ErrorBoundary> : <ErrorBoundary fallback={errorFallback}><AuthPage onNavigate={setPage} onLogin={handleLogin} /></ErrorBoundary>
+      return user ? <AdminPanel user={user} onLogout={handleLogout} /> : <AuthPage onNavigate={setPage} onLogin={handleLogin} />
     case 'dashboard':
-      return user ? <ErrorBoundary fallback={errorFallback}><UserDashboard user={user} onLogout={handleLogout} /></ErrorBoundary> : <ErrorBoundary fallback={errorFallback}><AuthPage onNavigate={setPage} onLogin={handleLogin} /></ErrorBoundary>
+      return user ? <UserDashboard user={user} onLogout={handleLogout} /> : <AuthPage onNavigate={setPage} onLogin={handleLogin} />
     default:
-      return <ErrorBoundary fallback={errorFallback}><LandingPage onNavigate={setPage} /></ErrorBoundary>
+      return <LandingPage onNavigate={setPage} />
   }
 }
