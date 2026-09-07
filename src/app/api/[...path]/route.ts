@@ -149,8 +149,29 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
 
 function json(data: any, status = 200) { return NextResponse.json(data, { status }) }
 
+
+// ==================== API LOGGING ====================
+async function logApiCall(userId: string | null, endpoint: string, method: string, statusCode: number, ip: string | null, errorMessage: string | null) {
+  try {
+    await prisma.apiLog.create({
+      data: {
+        userId: userId || null,
+        endpoint,
+        method,
+        statusCode,
+        ipAddress: ip || null,
+        errorMessage: errorMessage || null,
+      }
+    })
+  } catch (e) {
+    // silent - logging should never break the API
+  }
+}
+
 async function handleRoute(method: string, req: NextRequest, route: string) {
   const url = new URL(req.url)
+  const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || req.headers.get('x-real-ip') || null
+  let _logUserId: string | null = null
   try {
     // ===== AUTH =====
     if (route === '/auth/login' && method === 'POST') {
@@ -706,6 +727,8 @@ async function handleRoute(method: string, req: NextRequest, route: string) {
     return json({ error: 'Not found', route }, 404)
   } catch (e: any) {
     console.error(`[API Error] ${route}:`, e.message)
+    logApiCall(_logUserId, route, method, 500, ip, e.message)
     return json({ error: e.message }, 500)
   }
+  logApiCall(_logUserId, route, method, 200, ip, null)
 }

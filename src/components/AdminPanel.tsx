@@ -243,7 +243,7 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
     try {
       const res = await authFetch('/api/api-logs')
       const data = await res.json()
-      const items = Array.isArray(data) ? data : Array.isArray(data?.items) ? data.items : []
+      const items = Array.isArray(data) ? data : Array.isArray(data?.logs) ? data.logs : Array.isArray(data?.items) ? data.items : []
       setApiLogs(items.slice(0, 50))
     } catch { /* ignore */ }
   }, [])
@@ -262,7 +262,7 @@ export default function AdminPanel({ user, onLogout }: AdminPanelProps) {
     try {
       const res = await authFetch('/api/notifications')
       const data = await res.json()
-      const items = Array.isArray(data) ? data : Array.isArray(data?.items) ? data.items : []
+      const items = Array.isArray(data) ? data : Array.isArray(data?.notifications) ? data.notifications : Array.isArray(data?.items) ? data.items : []
       setNotifications(items.slice(0, 20))
     } catch { /* ignore */ }
   }, [])
