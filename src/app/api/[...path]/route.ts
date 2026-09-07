@@ -386,19 +386,38 @@ async function handleRoute(method: string, req: NextRequest, route: string) {
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
       const filename = `paybridge-backup-${timestamp}.sql`
       const backupPath = path.join(BACKUP_DIR, filename)
-      const dbUrl = process.env.DATABASE_URL
-      if (!dbUrl) return json({ error: 'DATABASE_URL not configured' }, 500)
       try {
-        const { execSync } = require('child_process')
-        const url = new URL(dbUrl)
-        const host = url.hostname || 'localhost'
-        const port = url.port || '5432'
-        const dbName = url.pathname.slice(1)
-        const dbUser = url.username || 'postgres'
-        const dbPass = url.password || ''
-        const envVars = `PGPASSWORD="${dbPass}"`
-        const cmd = `${envVars} pg_dump -h ${host} -p ${port} -U ${dbUser} -d ${dbName} --no-owner --no-acl -f "${backupPath}"`
-        execSync(cmd, { timeout: 30000 })
+        // Get all public tables
+        const tables = await prisma.$queryRawUnsafe<{table_name: string}[]>(
+          "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE'"
+        )
+        let sql = '-- PayBridge Database Backup\n'
+        sql += '-- Date: ' + new Date().toISOString() + '\n\n'
+        for (const { table_name } of tables) {
+          try {
+            const rows = await prisma.$queryRawUnsafe<any[]>(`SELECT * FROM "${table_name}"`)
+            sql += `-- Table: ${table_name} (${rows.length} rows)\n`
+            if (rows.length > 0) {
+              const cols = Object.keys(rows[0])
+              for (const row of rows) {
+                const values = cols.map(c => {
+                  const v = row[c]
+                  if (v === null) return 'NULL'
+                  if (typeof v === 'number') return String(v)
+                  if (typeof v === 'boolean') return v ? 'true' : 'false'
+                  if (v instanceof Date) return "'" + v.toISOString() + "'"
+                  if (typeof v === 'object') return "'" + JSON.stringify(v).replace(/'/g, "''") + "'"
+                  return "'" + String(v).replace(/'/g, "''") + "'"
+                })
+                sql += `INSERT INTO "${table_name}" (${cols.map(c => '"' + c + '"').join(', ')}) VALUES (${values.join(', ')});\n`
+              }
+            }
+            sql += '\n'
+          } catch (e: any) {
+            sql += `-- Error backing up ${table_name}: ${e.message}\n\n`
+          }
+        }
+        fs.writeFileSync(backupPath, sql, 'utf-8')
         const stats = fs.statSync(backupPath)
         return json({ success: true, filename, size: stats.size })
       } catch (e: any) {
@@ -414,23 +433,15 @@ async function handleRoute(method: string, req: NextRequest, route: string) {
       const { filename } = body
       const backupPath = path.join(BACKUP_DIR, filename)
       if (!fs.existsSync(backupPath)) return json({ error: 'Backup not found' }, 404)
-      const dbUrl = process.env.DATABASE_URL
-      if (!dbUrl) return json({ error: 'DATABASE_URL not configured' }, 500)
       try {
-        const { execSync } = require('child_process')
-        const url = new URL(dbUrl)
-        const host = url.hostname || 'localhost'
-        const port = url.port || '5432'
-        const dbName = url.pathname.slice(1)
-        const dbUser = url.username || 'postgres'
-        const dbPass = url.password || ''
-        const envVars = `PGPASSWORD="${dbPass}"`
-        const preRestore = path.join(BACKUP_DIR, `pre-restore-${Date.now()}.sql`)
-        const dumpCmd = `${envVars} pg_dump -h ${host} -p ${port} -U ${dbUser} -d ${dbName} --no-owner --no-acl -f "${preRestore}"`
-        execSync(dumpCmd, { timeout: 30000 })
-        const restoreCmd = `${envVars} psql -h ${host} -p ${port} -U ${dbUser} -d ${dbName} -f "${backupPath}" --no-owner --no-acl`
-        execSync(restoreCmd, { timeout: 60000 })
-        return json({ success: true })
+        const sql = fs.readFileSync(backupPath, 'utf-8')
+        const statements = sql.split(';').map(s => s.trim()).filter(s => s.length > 0 && !s.startsWith('--'))
+        for (const stmt of statements) {
+          if (stmt.toUpperCase().startsWith('INSERT')) {
+            await prisma.$executeRawUnsafe(stmt)
+          }
+        }
+        return json({ success: true, restored: statements.length })
       } catch (e: any) {
         console.error('[Restore Error]', e.message)
         return json({ error: 'Restore failed: ' + e.message }, 500)
