@@ -384,11 +384,27 @@ async function handleRoute(method: string, req: NextRequest, route: string) {
       if (!user) return json({ error: 'Admin access required' }, 401)
       ensureBackupDir()
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
-      const filename = `paybridge-backup-${timestamp}.db`
-      const dbPath = path.join(process.cwd(), 'prisma', 'dev.db')
-      if (!fs.existsSync(dbPath)) return json({ error: 'Database not found' }, 404)
-      fs.copyFileSync(dbPath, path.join(BACKUP_DIR, filename))
-      return json({ success: true, filename })
+      const filename = `paybridge-backup-${timestamp}.sql`
+      const backupPath = path.join(BACKUP_DIR, filename)
+      const dbUrl = process.env.DATABASE_URL
+      if (!dbUrl) return json({ error: 'DATABASE_URL not configured' }, 500)
+      try {
+        const { execSync } = require('child_process')
+        const url = new URL(dbUrl)
+        const host = url.hostname || 'localhost'
+        const port = url.port || '5432'
+        const dbName = url.pathname.slice(1)
+        const dbUser = url.username || 'postgres'
+        const dbPass = url.password || ''
+        const envVars = `PGPASSWORD="${dbPass}"`
+        const cmd = `${envVars} pg_dump -h ${host} -p ${port} -U ${dbUser} -d ${dbName} --no-owner --no-acl -f "${backupPath}"`
+        execSync(cmd, { timeout: 30000 })
+        const stats = fs.statSync(backupPath)
+        return json({ success: true, filename, size: stats.size })
+      } catch (e: any) {
+        console.error('[Backup Error]', e.message)
+        return json({ error: 'Backup failed: ' + e.message }, 500)
+      }
     }
 
     if (route === '/admin/backups/restore' && method === 'POST') {
@@ -398,10 +414,27 @@ async function handleRoute(method: string, req: NextRequest, route: string) {
       const { filename } = body
       const backupPath = path.join(BACKUP_DIR, filename)
       if (!fs.existsSync(backupPath)) return json({ error: 'Backup not found' }, 404)
-      const dbPath = path.join(process.cwd(), 'prisma', 'dev.db')
-      fs.copyFileSync(dbPath, path.join(BACKUP_DIR, `pre-restore-${Date.now()}.db`))
-      fs.copyFileSync(backupPath, dbPath)
-      return json({ success: true })
+      const dbUrl = process.env.DATABASE_URL
+      if (!dbUrl) return json({ error: 'DATABASE_URL not configured' }, 500)
+      try {
+        const { execSync } = require('child_process')
+        const url = new URL(dbUrl)
+        const host = url.hostname || 'localhost'
+        const port = url.port || '5432'
+        const dbName = url.pathname.slice(1)
+        const dbUser = url.username || 'postgres'
+        const dbPass = url.password || ''
+        const envVars = `PGPASSWORD="${dbPass}"`
+        const preRestore = path.join(BACKUP_DIR, `pre-restore-${Date.now()}.sql`)
+        const dumpCmd = `${envVars} pg_dump -h ${host} -p ${port} -U ${dbUser} -d ${dbName} --no-owner --no-acl -f "${preRestore}"`
+        execSync(dumpCmd, { timeout: 30000 })
+        const restoreCmd = `${envVars} psql -h ${host} -p ${port} -U ${dbUser} -d ${dbName} -f "${backupPath}" --no-owner --no-acl`
+        execSync(restoreCmd, { timeout: 60000 })
+        return json({ success: true })
+      } catch (e: any) {
+        console.error('[Restore Error]', e.message)
+        return json({ error: 'Restore failed: ' + e.message }, 500)
+      }
     }
 
     if (route === '/admin/transactions/live' && method === 'GET') {
