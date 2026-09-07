@@ -126,25 +126,37 @@ const EASYPAISA_URLS = { production: 'https://easypay.easypaisa.com.pk/easypay-m
 export async function GET(request: NextRequest, { params }: { params: Promise<{ path: string[] }> }) {
   const { path: urlPath } = await params
   const route = '/' + urlPath.join('/')
-  return handleRoute('GET', request, route)
+  const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || null
+  const response = await handleRoute('GET', request, route)
+  logApiCall(null, route, 'GET', response.status, ip, response.status >= 400 ? 'Error' : null)
+  return response
 }
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ path: string[] }> }) {
   const { path: urlPath } = await params
   const route = '/' + urlPath.join('/')
-  return handleRoute('POST', request, route)
+  const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || null
+  const response = await handleRoute('POST', request, route)
+  logApiCall(null, route, 'POST', response.status, ip, response.status >= 400 ? 'Error' : null)
+  return response
 }
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ path: string[] }> }) {
   const { path: urlPath } = await params
   const route = '/' + urlPath.join('/')
-  return handleRoute('PATCH', request, route)
+  const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || null
+  const response = await handleRoute('PATCH', request, route)
+  logApiCall(null, route, 'PATCH', response.status, ip, response.status >= 400 ? 'Error' : null)
+  return response
 }
 
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ path: string[] }> }) {
   const { path: urlPath } = await params
   const route = '/' + urlPath.join('/')
-  return handleRoute('DELETE', request, route)
+  const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || null
+  const response = await handleRoute('DELETE', request, route)
+  logApiCall(null, route, 'DELETE', response.status, ip, response.status >= 400 ? 'Error' : null)
+  return response
 }
 
 function json(data: any, status = 200) { return NextResponse.json(data, { status }) }
@@ -171,7 +183,6 @@ async function logApiCall(userId: string | null, endpoint: string, method: strin
 async function handleRoute(method: string, req: NextRequest, route: string) {
   const url = new URL(req.url)
   const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || req.headers.get('x-real-ip') || null
-  let _logUserId: string | null = null
   try {
     // ===== AUTH =====
     if (route === '/auth/login' && method === 'POST') {
@@ -727,8 +738,7 @@ async function handleRoute(method: string, req: NextRequest, route: string) {
     return json({ error: 'Not found', route }, 404)
   } catch (e: any) {
     console.error(`[API Error] ${route}:`, e.message)
-    logApiCall(_logUserId, route, method, 500, ip, e.message)
+    logApiCall(null, route, method, 500, req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || null, e.message)
     return json({ error: e.message }, 500)
   }
-  logApiCall(_logUserId, route, method, 200, ip, null)
 }
