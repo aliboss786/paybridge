@@ -94,7 +94,7 @@ export default function UserDashboard({ user, onLogout }: UserDashboardProps) {
     try {
       const res = await authFetch('/api/ledger')
       const data = await res.json()
-      if (res.ok) setLedger(data.items || data || [])
+      if (res.ok) { const items = Array.isArray(data) ? data : (data.ledger || data.items || []); setLedger(Array.isArray(items) ? items : []) }
     } catch { /* ignore */ }
   }, [])
 
