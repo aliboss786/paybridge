@@ -112,12 +112,11 @@ function buildJazzCashRequest(merchantId: string, password: string, integritySal
   for (const [k, v] of Object.entries(allFields)) {
     if (v !== '') nonEmptyFields[k] = v
   }
-  // Official JazzCash doc: pp_Password and pp_SecureHash must NOT be included in hash computation
-  const hashExcluded = new Set(['pp_Password', 'pp_SecureHash'])
-  const sortedKeys = Object.keys(nonEmptyFields).filter(k => !hashExcluded.has(k)).sort()
+  // JazzCash HMAC-SHA256: all non-empty fields included in hash (pp_SecureHash not yet added)
+  const sortedKeys = Object.keys(nonEmptyFields).sort()
   const values = sortedKeys.map(k => nonEmptyFields[k])
   const stringToSign = integritySalt + '&' + values.join('&')
-  nonEmptyFields['pp_SecureHash'] = hmacSha256(integritySalt, stringToSign)
+  nonEmptyFields['pp_SecureHash'] = hmacSha256(integritySalt, stringToSign).toUpperCase()
   return nonEmptyFields
 }
 
