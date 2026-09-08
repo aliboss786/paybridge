@@ -88,9 +88,11 @@ function getPktNow(): { txnDateTime: string; txnExpiryDateTime: string } {
 
 function buildJazzCashRequest(merchantId: string, password: string, integritySalt: string, amount: number, txnRefNo: string, returnUrl: string, phone?: string) {
   const { txnDateTime, txnExpiryDateTime } = getPktNow()
+  const billRef = txnRefNo.replace(/[^a-zA-Z0-9]/g, '')
+  // ALL fields must be sent in request body (per JazzCash doc: "Do not remove any parameters even if empty")
   const allFields: Record<string, string> = {
     pp_Amount: String(Math.round(amount * 100)),
-    pp_BillReference: txnRefNo.replace(/[^a-zA-Z0-9]/g, ''),
+    pp_BillReference: billRef,
     pp_Description: 'Payment via PayBridge',
     pp_Language: 'EN',
     pp_MerchantID: merchantId,
@@ -108,16 +110,16 @@ function buildJazzCashRequest(merchantId: string, password: string, integritySal
     ppmpf_4: '',
     ppmpf_5: '',
   }
-  const nonEmptyFields: Record<string, string> = {}
+  // Hash: only non-empty fields sorted alphabetically (per HMAC-SHA256 doc)
+  const hashFields: Record<string, string> = {}
   for (const [k, v] of Object.entries(allFields)) {
-    if (v !== '') nonEmptyFields[k] = v
+    if (v !== '' && k !== 'pp_SecureHash') hashFields[k] = v
   }
-  // JazzCash HMAC-SHA256: all non-empty fields included in hash (pp_SecureHash not yet added)
-  const sortedKeys = Object.keys(nonEmptyFields).sort()
-  const values = sortedKeys.map(k => nonEmptyFields[k])
+  const sortedKeys = Object.keys(hashFields).sort()
+  const values = sortedKeys.map(k => hashFields[k])
   const stringToSign = integritySalt + '&' + values.join('&')
-  nonEmptyFields['pp_SecureHash'] = hmacSha256(integritySalt, stringToSign).toUpperCase()
-  return nonEmptyFields
+  allFields['pp_SecureHash'] = hmacSha256(integritySalt, stringToSign).toUpperCase()
+  return allFields
 }
 
 // ==================== GATEWAY URLs ====================
